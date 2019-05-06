@@ -105,7 +105,7 @@ import com.serotonin.bacnet4j.util.RequestUtils;
 public class BACnetRemoteConnection extends BACnetConnection implements DeviceEventListener {
 
     // ignores channels that contain a '.'-char (Siemens compound connectors)
-    private boolean ignoreCompoundChannels = true;
+    private boolean ignoreCompoundChannels = false;
 
     private final LocalDevice LOCAL_DEVICE;
     private final RemoteDevice REMOTE_DEVICE;
@@ -229,7 +229,7 @@ public class BACnetRemoteConnection extends BACnetConnection implements DeviceEv
 
                 // objects with unknown property type definition will be ignored
                 // SIEMENS: channel addresses with . mean compound connectors and will be ignored
-                if (def != null && (!channelAddress.contains(".") && ignoreCompoundChannels)) {
+                if (def != null && !(channelAddress.contains(".") && ignoreCompoundChannels)) {
                     ValueType valueType = ConversionUtil.getValueTypeMapping(def.getClazz());
                     if (valueType == null)
                         valueType = ValueType.STRING; // default value type
