@@ -107,6 +107,9 @@ public class BACnetRemoteConnection extends BACnetConnection implements DeviceEv
     // ignores channels that contain a '.'-char (Siemens compound connectors)
     private boolean ignoreCompoundChannels = false;
 
+    // Deactivate possibility for writing to remote BACnet objects
+    private final boolean WriteAllowed = false;
+    
     private final LocalDevice LOCAL_DEVICE;
     private final RemoteDevice REMOTE_DEVICE;
 
@@ -650,32 +653,40 @@ public class BACnetRemoteConnection extends BACnetConnection implements DeviceEv
         // TODO add multiple write
 
         for (ChannelValueContainer channelValueContainer : containers) {
-            final ObjectIdentifier objectIdentifier = getObjectIdentifier(channelValueContainer);
-            if (objectIdentifier == null) {
-                channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_WITH_THIS_ADDRESS_NOT_FOUND);
-                continue;
-            }
-
-            if (objectIdentifier != null) {
-                final PropertyTypeDefinition propertyTypeDefinition = ObjectProperties
-                        .getPropertyTypeDefinition(objectIdentifier.getObjectType(), PropertyIdentifier.presentValue);
-                Encodable value = ConversionUtil.convertValue(channelValueContainer.getValue(), propertyTypeDefinition);
-
-                if (value != null) {
-                    UnsignedInteger priority = (writePriority == null) ? null
-                            : new UnsignedInteger(writePriority.intValue());
-
-                    WritePropertyRequest request = new WritePropertyRequest(objectIdentifier,
-                            PropertyIdentifier.presentValue, null, value, priority);
-                    LOCAL_DEVICE.send(REMOTE_DEVICE, request);
-                    channelValueContainer.setFlag(Flag.VALID);
+        
+            if(WriteAllowed)
+        	{
+                final ObjectIdentifier objectIdentifier = getObjectIdentifier(channelValueContainer);
+                if (objectIdentifier == null) {
+                    channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_WITH_THIS_ADDRESS_NOT_FOUND);
+                    continue;
                 }
-                else {
-                    // tried to write a not supported object type
-                    logger.debug("cannot write value of type " + objectIdentifier.getObjectType());
-                    channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_VALUE_TYPE_CONVERSION_EXCEPTION);
+
+                if (objectIdentifier != null) {
+                    final PropertyTypeDefinition propertyTypeDefinition = ObjectProperties
+                            .getPropertyTypeDefinition(objectIdentifier.getObjectType(), PropertyIdentifier.presentValue);
+                    Encodable value = ConversionUtil.convertValue(channelValueContainer.getValue(), propertyTypeDefinition);
+
+                    if (value != null) {
+                        UnsignedInteger priority = (writePriority == null) ? null
+                                : new UnsignedInteger(writePriority.intValue());
+
+                        WritePropertyRequest request = new WritePropertyRequest(objectIdentifier,
+                                PropertyIdentifier.presentValue, null, value, priority);
+                        LOCAL_DEVICE.send(REMOTE_DEVICE, request);
+                        channelValueContainer.setFlag(Flag.VALID);
+                    }
+                    else {
+                        // tried to write a not supported object type
+                        logger.debug("cannot write value of type " + objectIdentifier.getObjectType());
+                        channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_VALUE_TYPE_CONVERSION_EXCEPTION);
+                    }
                 }
             }
+            else
+            {
+        		channelValueContainer.setFlag(Flag.ACCESS_METHOD_NOT_SUPPORTED);
+        	}   
         }
 
         return null; // according to method documentation
