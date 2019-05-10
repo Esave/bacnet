@@ -30,6 +30,9 @@ public class BACnetChannelHandle {
     private final PropertyIdentifier propertyIdentifier;
     private PropertyTypeDefinition propTypeDef;
     
+    // Deactivate possibility for writing to self-served BACnet objects
+    private final boolean WriteAllowed = false;
+    
     public BACnetChannelHandle(BACnetObject object, PropertyIdentifier property) {
         super();
         this.bacnetObject = object;
@@ -64,28 +67,35 @@ public class BACnetChannelHandle {
     }
 
     public void write(ChannelValueContainer channelValueContainer) {
-        final Encodable value;
-        try {
+        if(WriteAllowed)
+        {
+            final Encodable value;
             try {
-                value = ConversionUtil.convertValue(channelValueContainer.getValue(), getPropertyTypeDefinition());
+                try {
+                    value = ConversionUtil.convertValue(channelValueContainer.getValue(), getPropertyTypeDefinition());
+                }
+                catch (IllegalArgumentException iae) {
+                    // tried to write a not supported object type
+                    logger.error("cannot write value. " + iae.getMessage());
+                    channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_VALUE_TYPE_CONVERSION_EXCEPTION);
+                    return;
+                }
+                bacnetObject.writeProperty(getPropertyTypeDefinition().getPropertyIdentifier(), value);
             }
-            catch (IllegalArgumentException iae) {
-                // tried to write a not supported object type
-                logger.error("cannot write value. " + iae.getMessage());
-                channelValueContainer.setFlag(Flag.DRIVER_ERROR_CHANNEL_VALUE_TYPE_CONVERSION_EXCEPTION);
-                return;
+            catch (BACnetRuntimeException | BACnetServiceException ex) {
+                BACnetServiceException serviceException = (BACnetServiceException) ex.getCause();
+                if (ErrorCode.writeAccessDenied.equals(serviceException.getErrorCode())) {
+                    channelValueContainer.setFlag(Flag.ACCESS_METHOD_NOT_SUPPORTED);
+                    return;
+                }
+                channelValueContainer.setFlag(Flag.UNKNOWN_ERROR);
             }
-            bacnetObject.writeProperty(getPropertyTypeDefinition().getPropertyIdentifier(), value);
+            channelValueContainer.setFlag(Flag.VALID);
         }
-        catch (BACnetRuntimeException | BACnetServiceException ex) {
-            BACnetServiceException serviceException = (BACnetServiceException) ex.getCause();
-            if (ErrorCode.writeAccessDenied.equals(serviceException.getErrorCode())) {
-                channelValueContainer.setFlag(Flag.ACCESS_METHOD_NOT_SUPPORTED);
-                return;
-            }
-            channelValueContainer.setFlag(Flag.UNKNOWN_ERROR);
+        else
+        {
+        	channelValueContainer.setFlag(Flag.ACCESS_METHOD_NOT_SUPPORTED);
         }
-        channelValueContainer.setFlag(Flag.VALID);
     }
 
     public void startListening(ChannelRecordContainer channelRecordContainer, RecordsReceivedListener listener) {
